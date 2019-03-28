@@ -1,14 +1,15 @@
 using Hungarian
+using Random
 include("hungarian.jl")
 
 function benching()
-    seed = srand(7)
+    seed = Random.seed!(7)
 
     for n in [10, 50, 100, 200, 400, 800, 1000, 2000, 4000, 8000]
-        gc()
+        Base.GC.gc()
         
         A = rand(seed, UInt16, n, n)
-        A[A .> 50000] = 50000
+        A[A .> 50000] .= 50000
         B = copy(A)
         println("n: ", n)
         println("Lib: ")
