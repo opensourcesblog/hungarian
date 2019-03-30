@@ -1,6 +1,6 @@
 using MatrixNetworks
 
-function run_hungarian(mat) 
+function run_hungarian(mat)
     setup_start = time()
     nrows, ncols = size(mat)
 
@@ -32,11 +32,10 @@ function run_hungarian(mat)
     c_outer_while = 1
     c_inner_while = 1
     t = time()
-    nmatzeros = 0
-    matzeros = fill(CartesianIndex(0,0), nrows*ncols)
-    matzero_ind = findall(iszero, mat)
-    matzeros[1:length(matzero_ind)] = matzero_ind
-    nmatzeros = length(matzero_ind)
+    matzeros = findall(iszero, mat)
+    nmatzeros = length(matzeros)
+    max_nmatzeros = nmatzeros
+    addition_vector = zeros(Int64, nrows)
     println("time for matzeros: ", time()-t)
     println("time for setup: ", time()-setup_start)
 
@@ -118,7 +117,12 @@ function run_hungarian(mat)
         for matzero in matzeros_sub
             if (rows_marked[matzero[1]] && cols_marked[matzero[2]]) || (!rows_marked[matzero[1]] && !cols_marked[matzero[2]])
                 nmatzeros += 1
-                matzeros[nmatzeros] = matzero
+                if nmatzeros > max_nmatzeros
+                    max_nmatzeros += 1
+                    push!(matzeros, matzero)
+                else
+                    matzeros[nmatzeros] = matzero
+                end
             end
         end
         matzeros_total_time += time()-start_timer
@@ -156,7 +160,9 @@ function run_hungarian(mat)
         
         start_timer = time()
         #minimum where !cols_marked but rows_marked
-        @inbounds @views min_val = minimum(mat[ind_marked_rows_sub,ind_unmarked_cols_sub])
+        @views mat_ind_unmarked_cols_sub = mat[:,ind_unmarked_cols_sub]
+        @views rmins = vec(minimum(mat_ind_unmarked_cols_sub[ind_marked_rows_sub,:], dims=2))
+        @views min_val = minimum(rmins)
         find_min_total_time += time()-start_timer
         
         start_timer = time()
@@ -166,7 +172,12 @@ function run_hungarian(mat)
                 mat[r,c] -= min_val
                 if mat[r,c] == 0
                     nmatzeros += 1
-                    matzeros[nmatzeros] = CartesianIndex(r,c)
+                    if nmatzeros > max_nmatzeros
+                        max_nmatzeros += 1
+                        push!(matzeros, CartesianIndex(r,c))
+                    else
+                        matzeros[nmatzeros] = CartesianIndex(r,c)
+                    end
                 end
             end
         end
@@ -174,7 +185,12 @@ function run_hungarian(mat)
 
         start_timer = time()        
         # add minimum where !rows_marked but cols_marked
-        @inbounds @views mat[ind_unmarked_rows_sub,ind_marked_cols_sub] .+= min_val
+        addition_vector[ind_marked_rows_sub] .= 0
+        addition_vector[ind_unmarked_rows_sub] .= min_val
+        @views mat_ind_marked_cols_sub = mat[:,ind_marked_cols_sub]
+        for col in eachcol(mat_ind_marked_cols_sub)
+            col .+= addition_vector
+        end
         add_min_total_time += time()-start_timer
         
     end
