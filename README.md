@@ -1,6 +1,8 @@
 # Hungarian Method
 
-The code is explained on my blog [opensourc.es](http://opensourc.es/blog/hungarian-method)
+The code is explained on my blog [opensourc.es/blog/hungarian-method](http://opensourc.es/blog/hungarian-method) and the updated performance version on
+[opensourc.es/blog/hungarian-performance](http://opensourc.es/blog/hungarian-performance)
+
 
 If you want to run the code simply include `hungarian.jl` and run `run_hungarian(A)` where a is a `n x n` matrix. The benchmarking can be done by running `benchmark.jl`.
 

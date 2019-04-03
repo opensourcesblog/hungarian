@@ -1,70 +1,55 @@
 using MatrixNetworks
 
-function run_hungarian(mat)
-    setup_start = time()
-    nrows, ncols = size(mat)
+function subMins!(mat)
+    mcols = minimum(mat, dims=1)
+    for j = 1:size(mat,2), i = 1:size(mat,1)
+        mat[i,j] -= mcols[j] 
+    end  
+    mrows = minimum(mat, dims=2)
+    for j = 1:size(mat,2), i = 1:size(mat,1)
+        mat[i,j] -= mrows[i]
+    end 
+end 
 
-    # subtract col minimum
-    mat .-= minimum(mat, dims=1)
-    
-    # subtract row minimum
-    mat .-= minimum(mat, dims=2)
-    println("time for setup: ", time()-setup_start)
-    
-    rows_marked = falses(nrows)
-    cols_marked = falses(ncols)
+function run_hungarian!(mat) 
+    # subtract col minimum and then row minimum
+    subMins!(mat)
 
-    inner_while_total = 0.0
-    matzeros_total_time = 0.0
-    create_ind_vect_total_time = 0.0
-    find_min_total_time = 0.0
-    add_min_total_time = 0.0
-    sub_min_total_time = 0.0
-    
+    nrows = size(mat)[1]
+    ncols = size(mat)[2]
+    rows_marked = zeros(Bool,nrows)
+    cols_marked = zeros(Bool,ncols)
+
     new_marked_row_ind = falses(nrows)
     new_marked_col_ind = falses(ncols)
-    
+
     ind_marked_rows = zeros(Int64, nrows)
     ind_unmarked_rows = zeros(Int64, nrows)
     ind_marked_cols = zeros(Int64, ncols)
     ind_unmarked_cols = zeros(Int64, ncols)
-    
-    c_outer_while = 1
-    c_inner_while = 1
-    t = time()
+
     matzeros = findall(iszero, mat)
     nmatzeros = length(matzeros)
     max_nmatzeros = nmatzeros
+
     addition_vector = zeros(Int64, nrows)
-    println("time for matzeros: ", time()-t)
-    println("time for setup: ", time()-setup_start)
 
     while true
+        @views matzeros_sub = matzeros[1:nmatzeros]
         new_marked_col_ind[:] .= false
         new_marked_row_ind[:] .= false
-        c_outer_while += 1
 
-        matching = get_matching(mat, nmatzeros, matzeros)
+       
+        matching  = get_matching(matzeros_sub)
 
         if matching.cardinality == ncols
-            println("Total inner while time: ", inner_while_total)
-            println("Total matzeros_total_time: ", matzeros_total_time)
-            println("Total create_ind_vect_total_time: ", create_ind_vect_total_time)
-            println("Total find_min_total_time: ", find_min_total_time)
-            println("Total sub_min_total_time: ", sub_min_total_time)
-            println("Total add_min_total_time: ", add_min_total_time)
-            println("c_outer_while: ", c_outer_while)
-            println("c_inner_while: ", c_inner_while)
             return matching.match
         else
             sorted_matching = partialsort(matching.match, 1:matching.cardinality)
 
             # mark all rows which aren't matched
-            mark_start = time()
-            
             rows_marked[:] .= false
             cols_marked[:] .= false
-            
             last = 0
             for r=1:matching.cardinality
                 if sorted_matching[r]-last != 1
@@ -84,10 +69,7 @@ function run_hungarian(mat)
         end
        
         changed = true
-        start_inner = time()
-        @views matzeros_sub = matzeros[1:nmatzeros]
         while changed
-            c_inner_while += 1
             changed = false
             
             # mark cols
@@ -110,9 +92,7 @@ function run_hungarian(mat)
                 end
             end
         end
-        inner_while_total += time()-start_inner
-
-        start_timer = time()
+        
         nmatzeros = 0 
         for matzero in matzeros_sub
             if (rows_marked[matzero[1]] && cols_marked[matzero[2]]) || (!rows_marked[matzero[1]] && !cols_marked[matzero[2]])
@@ -125,9 +105,7 @@ function run_hungarian(mat)
                 end
             end
         end
-        matzeros_total_time += time()-start_timer
 
-        start_timer = time()
         ind_marked_rows_end = 0
         ind_unmarked_rows_end = 0
         for r=1:nrows
@@ -156,16 +134,12 @@ function run_hungarian(mat)
         @views ind_unmarked_rows_sub = ind_unmarked_rows[1:ind_unmarked_rows_end]
         @views ind_marked_cols_sub = ind_marked_cols[1:ind_marked_cols_end]
         @views ind_unmarked_cols_sub = ind_unmarked_cols[1:ind_unmarked_cols_end]
-        create_ind_vect_total_time += time()-start_timer
         
-        start_timer = time()
         #minimum where !cols_marked but rows_marked
         @views mat_ind_unmarked_cols_sub = mat[:,ind_unmarked_cols_sub]
         @views rmins = vec(minimum(mat_ind_unmarked_cols_sub[ind_marked_rows_sub,:], dims=2))
         @views min_val = minimum(rmins)
-        find_min_total_time += time()-start_timer
         
-        start_timer = time()
         # subtract minimum from this mask
         @inbounds for c in ind_unmarked_cols_sub
             for r in ind_marked_rows_sub
@@ -181,28 +155,24 @@ function run_hungarian(mat)
                 end
             end
         end
-        sub_min_total_time += time()-start_timer
-
-        start_timer = time()        
+       
         # add minimum where !rows_marked but cols_marked
-        addition_vector[ind_marked_rows_sub] .= 0
+        addition_vector .= 0
         addition_vector[ind_unmarked_rows_sub] .= min_val
         @views mat_ind_marked_cols_sub = mat[:,ind_marked_cols_sub]
         for col in eachcol(mat_ind_marked_cols_sub)
             col .+= addition_vector
         end
-        add_min_total_time += time()-start_timer
-        
     end
 end
 
-function get_matching(mat, nmatzeros, matzeros)
-    # create bipartite matching graph
+function get_matching(matzeros_sub)
+    # create bi partite matching graph
+    nmatzeros = length(matzeros_sub)
     ei = zeros(Int64, nmatzeros)
     ej = zeros(Int64, nmatzeros)
 
     i = 1
-    @views matzeros_sub = matzeros[1:nmatzeros]
     for rc in matzeros_sub
         ej[i] = rc[1] # row
         ei[i] = rc[2] # col

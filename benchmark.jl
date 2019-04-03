@@ -3,9 +3,9 @@ using Random
 include("hungarian.jl")
 
 function benching()
-    seed = Random.seed!(17)
+    seed = Random.seed!(7)
 
-    for n in [1000,4000,8000,16000,20000]
+    for n in [800,1000,2000,4000,8000,16000,20000]
         Base.GC.gc()
         
         A = rand(seed, UInt16, n, n)
@@ -13,11 +13,11 @@ function benching()
         B = copy(A)
         C = copy(A)
         println("n: ", n)
-        println("Own: ")
-        @time matching = run_hungarian(B)
         println("Lib: ")
         @time matching_lib =  Hungarian.munkres(A)
         matching_lib = [findfirst(matching_lib[:,i].==Hungarian.STAR) for i = 1:n]
+        println("Own: ")
+        @time matching = run_hungarian!(B)
     
         sum_lib = 0.0
         c = 1
