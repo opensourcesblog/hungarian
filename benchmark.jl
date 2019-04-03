@@ -5,7 +5,7 @@ include("hungarian.jl")
 function benching()
     seed = Random.seed!(7)
 
-    for n in [10, 50, 100, 200, 400, 800, 1000, 2000, 4000, 8000]
+    for n in [800, 1000, 2000, 4000, 8000]
         Base.GC.gc()
         
         A = rand(seed, UInt16, n, n)

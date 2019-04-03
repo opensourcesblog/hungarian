@@ -1,7 +1,8 @@
 using MatrixNetworks
 
 function run_hungarian(mat_original) 
-    mat = copy(mat_original)    
+    mat = copy(mat_original)  
+    setup_time_start = time()  
 
     # subtract col minimum
     for c=1:size(mat)[2]
@@ -18,6 +19,9 @@ function run_hungarian(mat_original)
     rows_marked = zeros(Bool,nrows)
     cols_marked = zeros(Bool,ncols)
 
+    new_marked_row_ind = falses(nrows)
+    new_marked_col_ind = falses(ncols)
+
     ind_marked_rows = zeros(Int64, nrows)
     ind_unmarked_rows = zeros(Int64, nrows)
     ind_marked_cols = zeros(Int64, ncols)
@@ -29,13 +33,21 @@ function run_hungarian(mat_original)
     find_min_total_time = 0.0
     add_min_total_time = 0.0
     sub_min_total_time = 0.0
+    zero_vals_total_time = 0.0
     
     c_outer_while = 1
     c_inner_while = 1
 
+    println("Time for setup: ", time()-setup_time_start)
+
     while true
+        new_marked_col_ind[:] .= false
+        new_marked_row_ind[:] .= false
+
         c_outer_while += 1
-        matching = get_matching(mat)
+       
+        matzeros = findall(iszero, mat)
+        matching  = get_matching(matzeros)
 
         if matching.cardinality == ncols
             println("Total inner while time: ", inner_while_total)
@@ -44,6 +56,7 @@ function run_hungarian(mat_original)
             println("Total find_min_total_time: ", find_min_total_time)
             println("Total sub_min_total_time: ", sub_min_total_time)
             println("Total add_min_total_time: ", add_min_total_time)
+            println("Total zero_vals_total_time: ", zero_vals_total_time)
             println("c_outer_while: ", c_outer_while)
             println("c_inner_while: ", c_inner_while)
             return matching.match
@@ -55,16 +68,12 @@ function run_hungarian(mat_original)
             
             rows_marked[:] .= false
             cols_marked[:] .= false
-            marked_col_ind = Vector{Int64}()
-            marked_row_ind = Vector{Int64}()
-            new_marked_row_ind = Vector{Int64}()
             last = 0
             for r=1:matching.cardinality
                 if sorted_matching[r]-last != 1
                     for ri=last+1:sorted_matching[r]-1
                         rows_marked[ri] = true
-                        push!(marked_row_ind,ri)
-                        push!(new_marked_row_ind,ri)
+                        new_marked_row_ind[ri] = true
                     end
                     last = sorted_matching[r]
                 else
@@ -73,8 +82,7 @@ function run_hungarian(mat_original)
             end
             for r=last+1:nrows
                 rows_marked[r] = true
-                push!(marked_row_ind,r)
-                push!(new_marked_row_ind,r)
+                new_marked_row_ind[r] = true
             end
         end
        
@@ -82,40 +90,30 @@ function run_hungarian(mat_original)
         changed = true
         while changed
             c_inner_while += 1
-            
             changed = false
-            new_marked_col_ind = Vector{Int64}()
+            
             # mark cols
-            in_start = time()
-            idx_not_marked_cols = findall(x->!x,cols_marked)
-            @inbounds for c in idx_not_marked_cols
-                @inbounds for r in new_marked_row_ind
-                    @inbounds if mat[r,c] == 0
-                        cols_marked[c] = true
-                        push!(marked_col_ind,c)
-                        push!(new_marked_col_ind,c)
-                        break
+            @inbounds for rc in matzeros
+                @inbounds if !cols_marked[rc[2]]
+                    @inbounds if new_marked_row_ind[rc[1]]
+                        cols_marked[rc[2]] = true
+                        new_marked_col_ind[rc[2]] = true
                     end
                 end
             end
 
-            new_marked_row_ind = Vector{Int64}()
-            idx_not_marked_rows = findall(x->!x,rows_marked)
             # mark new rows
-            @inbounds for r in idx_not_marked_rows
-                @inbounds for c in new_marked_col_ind
-                    @inbounds if matching.match[c] == r
-                        rows_marked[r] = true
-                        push!(marked_row_ind,r)
-                        push!(new_marked_row_ind,r)
-                        changed = true
-                        break
-                    end
+            @inbounds for c in 1:ncols
+                r = matching.match[c]
+                @inbounds if new_marked_col_ind[c] && !rows_marked[r]
+                    rows_marked[r] = true
+                    new_marked_row_ind[r] = true
+                    changed = true
                 end
             end
         end
         inner_while_total += time()-start_inner
-
+        
         start_timer = time()
         ind_marked_rows_end = 0
         ind_unmarked_rows_end = 0
@@ -168,13 +166,12 @@ function run_hungarian(mat_original)
     end
 end
 
-function get_matching(mat)
+function get_matching(matzeros_sub)
     # create bi partite matching graph
-    zero_vals = findall(x->x==0,mat)
     ei = Vector{Int64}()
     ej = Vector{Int64}()
 
-    for yx in zero_vals
+    for yx in matzeros_sub
         push!(ej,yx[1]) # row
         push!(ei,yx[2]) # col
     end
