@@ -35,19 +35,23 @@ function run_hungarian(mat_original)
     sub_min_total_time = 0.0
     zero_vals_total_time = 0.0
     
+    matzeros = findall(iszero, mat)
+    nmatzeros = length(matzeros)
+    max_nmatzeros = nmatzeros
+
     c_outer_while = 1
     c_inner_while = 1
 
     println("Time for setup: ", time()-setup_time_start)
 
     while true
+        @views matzeros_sub = matzeros[1:nmatzeros]
         new_marked_col_ind[:] .= false
         new_marked_row_ind[:] .= false
 
         c_outer_while += 1
        
-        matzeros = findall(iszero, mat)
-        matching  = get_matching(matzeros)
+        matching  = get_matching(matzeros_sub)
 
         if matching.cardinality == ncols
             println("Total inner while time: ", inner_while_total)
@@ -93,7 +97,7 @@ function run_hungarian(mat_original)
             changed = false
             
             # mark cols
-            @inbounds for rc in matzeros
+            @inbounds for rc in matzeros_sub
                 @inbounds if !cols_marked[rc[2]]
                     @inbounds if new_marked_row_ind[rc[1]]
                         cols_marked[rc[2]] = true
@@ -114,6 +118,21 @@ function run_hungarian(mat_original)
         end
         inner_while_total += time()-start_inner
         
+        start_timer = time()
+        nmatzeros = 0 
+        for matzero in matzeros_sub
+            if (rows_marked[matzero[1]] && cols_marked[matzero[2]]) || (!rows_marked[matzero[1]] && !cols_marked[matzero[2]])
+                nmatzeros += 1
+                if nmatzeros > max_nmatzeros
+                    max_nmatzeros += 1
+                    push!(matzeros, matzero)
+                else
+                    matzeros[nmatzeros] = matzero
+                end
+            end
+        end
+        matzeros_total_time += time()-start_timer
+
         start_timer = time()
         ind_marked_rows_end = 0
         ind_unmarked_rows_end = 0
@@ -155,6 +174,15 @@ function run_hungarian(mat_original)
         @inbounds for c in ind_unmarked_cols_sub
             for r in ind_marked_rows_sub
                 mat[r,c] -= min_val
+                if mat[r,c] == 0
+                    nmatzeros += 1
+                    if nmatzeros > max_nmatzeros
+                        max_nmatzeros += 1
+                        push!(matzeros, CartesianIndex(r,c))
+                    else
+                        matzeros[nmatzeros] = CartesianIndex(r,c)
+                    end
+                end
             end
         end
         sub_min_total_time += time()-start_timer
