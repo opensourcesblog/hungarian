@@ -111,8 +111,6 @@ function run_hungarian(mat_original)
         col_unmask[:] = true
         col_unmask[marked_col_ind] = false
         mask[:,col_unmask] = false
-
-        
         mat .+= min_val*mask
 
         min_total += time() - start_min
