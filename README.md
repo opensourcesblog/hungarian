@@ -4,7 +4,7 @@ The code is explained on my blog [opensourc.es/blog/hungarian-method](http://ope
 [opensourc.es/blog/hungarian-performance](http://opensourc.es/blog/hungarian-performance)
 
 
-If you want to run the code simply include `hungarian.jl` and run `run_hungarian(A)` where a is a `n x n` matrix. The benchmarking can be done by running `benchmark.jl`.
+If you want to run the code simply include `hungarian.jl` and run `run_hungarian!(A)` where `A` is a `n x n` matrix (it will be changed so copy it before if you need it later). The benchmarking can be done by running `benchmark.jl`.
 
 There you need to install [Hungarian](https://github.com/Gnimuc/Hungarian.jl) to compare this code against that library. If you find some bug or performance improvement please make a PR, issue and/or comment on my blog. Thanks in advance!
 
