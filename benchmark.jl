@@ -5,7 +5,7 @@ include("hungarian.jl")
 function benching()
     seed = Random.seed!(7)
 
-    for n in [800,1000,2000,4000,8000,16000,20000]
+    for n in [800,1000,2000,4000,8000,16000,20000,30000,40000]
         Base.GC.gc()
         
         A = rand(seed, UInt16, n, n)
@@ -14,7 +14,7 @@ function benching()
         C = copy(A)
         println("n: ", n)
         println("Lib: ")
-        @time matching_lib =  Hungarian.munkres(A)
+        @time matching_lib =  Hungarian.munkres!(A)
         matching_lib = [findfirst(matching_lib[:,i].==Hungarian.STAR) for i = 1:n]
         println("Own: ")
         @time matching = run_hungarian!(B)
